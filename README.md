@@ -1,61 +1,147 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+<h1 align="center">SPK Kenaikan Pangkat PNS</h1>
+<p align="center"><strong>Sistem Pendukung Keputusan untuk proses kenaikan pangkat PNS (Reguler, Pilihan, Ijazah).</strong></p>
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+## 1. Ringkasan
+Sistem ini membantu mengelola proses pengajuan dan persetujuan kenaikan pangkat PNS secara terstruktur dengan peran (role) terpisah: Pegawai, Admin, dan Pimpinan. Dokumen persyaratan fleksibel (dapat dikonfigurasi), periode pengajuan dikelola melalui tabel `batas_waktu`, dan promosi pangkat mengikuti aturan bisnis yang dibedakan per jenis pengajuan.
 
-## About Laravel
+## 2. Fitur Utama
+- Autentikasi & otorisasi multi-role (Pegawai / Admin / Pimpinan)
+- Pengelolaan periode pengisian (aktif / non-aktif) melalui batas waktu
+- Dynamic required documents (konfigurasi pola dokumen per jenis pengajuan)
+- Upload berkas per periode dengan grouping dan status
+- Pengajuan tiga jenis: Reguler, Pilihan, Ijazah
+- Target pangkat dinamis (hanya lebih tinggi dari pangkat saat ini, dibatasi maksimum IVe)
+- Persistensi target pangkat (tidak berubah saat re-upload)
+- Validasi admin (pemeriksaan berkas) & hasil SPK (dipertimbangkan)
+- Dashboard pimpinan dengan ringkasan & halaman khusus “Pengajuan Dipertimbangkan”
+- Persetujuan / penolakan pimpinan dengan update otomatis pangkat pegawai
+- Riwayat & notifikasi ke pegawai (disetujui / ditolak)
+- Halaman data pegawai + history kenaikan
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## 3. Arsitektur & Tabel Inti
+| Tabel | Deskripsi Singkat |
+|-------|-------------------|
+| users | Data akun + role + referensi pangkat (pangkat_id) |
+| pangkat | Master pangkat (nama_pangkat, golongan, ruang) |
+| uploads | Header pengajuan (jenis, periode, status, target_pangkat) |
+| detail_uploads | Detail file tiap dokumen persyaratan |
+| hasil_spk | Hasil penilaian SPK (hasil, catatan) |
+| batas_waktu | Periode upload (tanggal_mulai, tanggal_selesai, aktif) |
+| notifikasi | Notifikasi ke user |
+| spk_settings | Konfigurasi pola dokumen dinamis |
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+Referensi urutan pangkat disimpan di `config/pangkat.php` (orde & maks).
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+## 4. Instalasi & Setup
+1. Clone repo & masuk folder.
+2. Salin `.env.example` menjadi `.env` lalu sesuaikan koneksi database.
+3. Jalankan:
+```bash
+composer install
+php artisan key:generate
+php artisan migrate --seed   # jika ada seeder awal
+```
+4. (Opsional) Build asset front-end:
+```bash
+npm install
+npm run build   # atau: npm run dev
+```
+5. Jalankan server pengembangan:
+```bash
+php artisan serve
+```
 
-## Learning Laravel
+## 5. Konfigurasi Awal (Admin)
+1. Login sebagai Admin (buat manual lewat seeder / tinker jika belum ada).
+2. Buka menu Periode Pengisian: aktifkan / buat periode baru (hanya satu aktif).
+3. Atur dokumen wajib per jenis (menu Pengaturan Dokumen) menggunakan pola yang tersedia (misal: docpattern_reguler_sk_cpns, dll).
+4. Pastikan master tabel pangkat terisi (golongan & ruang) sesuai kebutuhan.
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+## 6. Alur Per Role
+### Pegawai
+1. Login -> Dashboard menampilkan ringkasan & status periode aktif.
+2. Menu Upload Berkas: pilih jenis pengajuan (reguler / pilihan / ijazah).
+3. Sistem menampilkan daftar dokumen wajib (dinamik). Unggah semua file yang diminta.
+4. Pilih target pangkat (untuk pilihan / ijazah). Sistem otomatis menyaring hanya pangkat yang lebih tinggi.
+5. Submit: status awal menunggu validasi admin. Target pangkat terkunci setelah pertama kali simpan.
+6. Notifikasi akan muncul saat berkas divalidasi dan saat keputusan pimpinan.
 
-You may also try the [Laravel Bootcamp](https://bootcamp.laravel.com), where you will be guided through building a modern Laravel application from scratch.
+### Admin
+1. Validasi Berkas: meninjau setiap upload & dokumen baru / revisi.
+2. Menjalankan proses SPK (menu Proses SPK) untuk memberi hasil (dipertimbangkan) pada pengajuan yang lolos.
+3. Mengatur Periode & Dokumen dinamis sesuai kebutuhan kebijakan.
+4. Tidak memutuskan kenaikan (hanya mempersiapkan untuk pimpinan).
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+### Pimpinan
+1. Dashboard: melihat ringkasan (jumlah pegawai, dipertimbangkan, disetujui, ditolak, aktif).
+2. Menu Pengajuan Dipertimbangkan: daftar pengajuan status “dipertimbangkan”.
+3. Menyetujui / menolak:
+	- Reguler: sistem otomatis naikkan satu tingkat (maksimal IVe).
+	- Pilihan / Ijazah: gunakan `target_pangkat` (dibatasi tidak melebihi batas maksimal & harus lebih tinggi).
+4. Setelah disetujui pangkat user diperbarui (`users.pangkat` & `pangkat_id`).
+5. Menu Persetujuan Kenaikan (jika masih dipakai) dapat difokuskan ke riwayat final.
+6. Menu Data Pegawai: daftar semua pegawai + history kenaikan (jumlah & terakhir).
 
-## Laravel Sponsors
+## 7. Aturan Promosi Pangkat
+| Jenis | Mekanisme |
+|-------|-----------|
+| Reguler | Naik otomatis ke pangkat berikut dalam orde |
+| Pilihan | Menggunakan target_pangkat yang dipilih user (lebih tinggi) |
+| Ijazah  | Sama seperti pilihan (verifikasi ijazah dalam dokumen) |
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+Batas atas ditentukan oleh `config('pangkat.maks')` default: IVe.
 
-### Premium Partners
+## 8. Dokumen Dinamis
+Setiap pola disimpan di `spk_settings` dengan key `docpattern_{jenis}_{slug}`. Admin dapat menambah / menghapus dokumen tanpa modifikasi kode. Form upload akan menghasilkan daftar wajib berdasarkan pola yang tersimpan.
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+## 9. Periode Upload (batas_waktu)
+Hanya satu periode aktif. Form upload menolak pengajuan di luar rentang aktif. Periode lama tetap menyimpan histori pengajuan.
 
-## Contributing
+## 10. Notifikasi
+Tersimpan di tabel `notifikasi` dengan flag `dibaca`. Pegawai & admin dapat menandai semua sebagai telah dibaca atau menghapus.
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+## 11. Riwayat & History Kenaikan
+Halaman Data Pegawai menghitung jumlah upload yang berstatus disetujui dan menampilkan informasi terakhir (periode, jenis, target). Pangkat aktual user selalu yang terbaru setelah persetujuan.
 
-## Code of Conduct
+## 12. Perintah Artisan Umum
+```bash
+php artisan migrate            # Migrasi database
+php artisan migrate:fresh       # Reset database (hati-hati)
+php artisan db:seed             # Jalankan seeder
+php artisan tinker              # Interaktif shell
+php artisan cache:clear         # Bersihkan cache aplikasi
+php artisan config:clear        # Bersihkan cache konfigurasi
+```
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+## 13. Pengujian
+Menggunakan Pest / PHPUnit (contoh bawaan Laravel). Jalankan:
+```bash
+php artisan test
+```
 
-## Security Vulnerabilities
+## 14. Deployment Singkat
+1. Jalankan migrasi & optimisasi:
+```bash
+php artisan migrate --force
+php artisan config:cache
+php artisan route:cache
+php artisan view:cache
+```
+2. Pastikan direktori `storage/` dan `bootstrap/cache/` writable.
+3. Sesuaikan `APP_ENV=production` & `APP_DEBUG=false`.
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+## 15. Troubleshooting
+| Masalah | Penyebab Umum | Solusi |
+|---------|---------------|--------|
+| Tidak bisa upload (periode) | Periode tidak aktif | Aktifkan periode di menu admin |
+| Target pangkat kosong | Jenis reguler / sudah terkunci | Ini normal; reguler auto-next |
+| File tidak tersimpan | Kolom hash/detail tidak sesuai | Pastikan `hash` ada di fillable `DetailUpload` |
+| Pangkat tidak naik setelah approve | Parsing gagal / config orde | Cek `config/pangkat.php` & relasi pangkat_id |
 
-## License
+## 16. Lisensi
+Proyek ini berbasis Laravel (MIT). Silakan gunakan & modifikasi sesuai kebutuhan internal.
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+---
+Untuk pengembangan lanjutan: audit trail promosi, export CSV, grafik tren dashboard, dan penyesuaian multi-periode paralel dapat ditambahkan.
+
+Selamat menggunakan sistem SPK Kenaikan Pangkat PNS.
