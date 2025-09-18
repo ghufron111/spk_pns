@@ -7,15 +7,36 @@
 
     <form method="POST" action="{{ route('admin.spk.settings.update') }}" class="card p-3 mb-4">
         @csrf
-        <h5 class="mb-3">Bobot Dokumen</h5>
+        <h5 class="mb-3">Bobot Dokumen per Jenis Kenaikan Pangkat</h5>
+        <div class="mb-3">
+            <label for="jenis_select" class="form-label">Pilih Jenis Kenaikan Pangkat</label>
+            <select id="jenis_select" name="jenis" class="form-select" onchange="this.form.submit()">
+                @foreach(config('berkas.jenis') as $jenisKey => $jenisVal)
+                    <option value="{{ $jenisKey }}" {{ (request('jenis', $selectedJenis ?? 'reguler') == $jenisKey) ? 'selected' : '' }}>{{ ucfirst($jenisKey) }}</option>
+                @endforeach
+            </select>
+        </div>
+        <div class="d-flex justify-content-end mb-2">
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="setDefaultWeights()">Set Default</button>
+        </div>
         <div class="row g-3">
-            @foreach($weights as $key => $val)
+            @foreach($dokumen as $slug => $label)
                 <div class="col-md-4">
-                    <label class="form-label text-uppercase small">{{ str_replace('_',' ', $key) }}</label>
-                    <input type="number" name="weights[{{ $key }}]" value="{{ $val }}" min="0" class="form-control" />
+                    <label class="form-label text-uppercase small">{{ $label }}</label>
+                    <input type="number" name="weights[{{ $slug }}]" id="weight_{{ $slug }}" value="{{ $weights[$slug] ?? 0 }}" min="0" class="form-control" />
                 </div>
             @endforeach
         </div>
+        <script>
+        function setDefaultWeights() {
+            const defaults = @json(array_map(fn($slug)=>config('berkas.weights')[$slug]??5, array_keys($dokumen)));
+            const slugs = @json(array_keys($dokumen));
+            slugs.forEach(function(slug, idx) {
+                let el = document.getElementById('weight_' + slug);
+                if(el) el.value = defaults[idx];
+            });
+        }
+        </script>
         <hr />
         <h5 class="mb-3">Ambang Keputusan</h5>
         <div class="row g-3">

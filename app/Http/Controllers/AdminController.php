@@ -321,39 +321,47 @@ class AdminController extends Controller
     }
 
     // Form pengaturan bobot & ambang SPK
-    public function spkSettings()
+    public function spkSettings(Request $request)
     {
-        $weights = $this->getDynamicWeights();
+        $jenisList = array_keys(config('berkas.jenis'));
+        $selectedJenis = $request->input('jenis', $jenisList[0] ?? 'reguler');
+        // Ambil dokumen untuk jenis terpilih
+        $dokumen = [];
+        foreach ((config('berkas.jenis')[$selectedJenis] ?? []) as $label => $pattern) {
+            $slug = strtolower(preg_replace('/[^a-zA-Z0-9]+/', '_', pathinfo($pattern, PATHINFO_FILENAME)));
+            $dokumen[$slug] = $label;
+        }
+        // Ambil bobot per jenis
+        $weights = [];
+        foreach ($dokumen as $slug => $label) {
+            $w = $this->getSetting('weight_'.$selectedJenis.'_'.$slug, null);
+            if ($w === null) {
+                // fallback ke global weight
+                $w = $this->getSetting('weight_'.$slug, config('berkas.weights')[$slug] ?? 0);
+            }
+            $weights[$slug] = $w;
+        }
         $thresholds = [
             'approved' => $this->getSetting('threshold_approved', config('berkas.thresholds.approved', 0.85)),
             'consider' => $this->getSetting('threshold_consider', config('berkas.thresholds.consider', 0.55)),
             'min_valid_docs' => $this->getSetting('threshold_min_valid_docs', config('berkas.thresholds.min_valid_docs', 3)),
         ];
-        return view('admin.spk_settings', compact('weights','thresholds'));
+        return view('admin.spk_settings', compact('weights','thresholds','dokumen','selectedJenis'));
     }
 
     public function spkSettingsUpdate(\Illuminate\Http\Request $request)
     {
+        $jenis = $request->input('jenis', 'reguler');
         $weightsInput = $request->input('weights', []);
         $approved = (float)$request->input('thresholds.approved', 0.85);
         $consider = (float)$request->input('thresholds.consider', 0.55);
         $minValidDocs = (int)$request->input('thresholds.min_valid_docs', 3);
 
-    // Jika user (bypass JS) mengirim nilai >1 anggap persen dan konversi ke desimal
-    if ($approved > 1) { $approved = $approved / 100; }
-    if ($consider > 1) { $consider = $consider / 100; }
+        if ($approved > 1) { $approved = $approved / 100; }
+        if ($consider > 1) { $consider = $consider / 100; }
+        $approved = max(0, min(1, $approved));
+        $consider = max(0, min(1, $consider));
 
-    // Clamp ke rentang 0..1
-    $approved = max(0, min(1, $approved));
-    $consider = max(0, min(1, $consider));
-
-        // Validasi dasar
-        $cleanWeights = [];
-        foreach ($this->getDynamicWeights() as $key => $old) {
-            $val = isset($weightsInput[$key]) ? (int)$weightsInput[$key] : $old;
-            if ($val < 0) $val = 0;
-            $cleanWeights[$key] = $val;
-        }
         $errors = [];
         if ($approved <= $consider) {
             $errors[] = 'Ambang disetujui harus lebih besar dari ambang dipertimbangkan.';
@@ -369,16 +377,21 @@ class AdminController extends Controller
         }
         if ($minValidDocs < 1) $minValidDocs = 1;
 
-        // Simpan ke file config/berkas.php (overwrite). Pada produksi sebaiknya gunakan tabel settings.
-        // Simpan ke tabel spk_settings
-        foreach ($cleanWeights as $k=>$v) {
-            SpkSetting::updateOrCreate(['key'=>'weight_'.$k], ['value'=>$v]);
+        // Simpan bobot per jenis
+        foreach ($weightsInput as $slug => $val) {
+            $v = (int)$val;
+            if ($v < 0) $v = 0;
+            \App\Models\SpkSetting::updateOrCreate([
+                'key' => 'weight_' . $jenis . '_' . $slug
+            ], [
+                'value' => $v
+            ]);
         }
-        SpkSetting::updateOrCreate(['key'=>'threshold_approved'], ['value'=>$approved]);
-        SpkSetting::updateOrCreate(['key'=>'threshold_consider'], ['value'=>$consider]);
-        SpkSetting::updateOrCreate(['key'=>'threshold_min_valid_docs'], ['value'=>$minValidDocs]);
+        \App\Models\SpkSetting::updateOrCreate(['key'=>'threshold_approved'], ['value'=>$approved]);
+        \App\Models\SpkSetting::updateOrCreate(['key'=>'threshold_consider'], ['value'=>$consider]);
+        \App\Models\SpkSetting::updateOrCreate(['key'=>'threshold_min_valid_docs'], ['value'=>$minValidDocs]);
 
-        return redirect()->route('admin.spk.settings')->with('success','Pengaturan SPK diperbarui.');
+        return redirect()->route('admin.spk.settings', ['jenis'=>$jenis])->with('success','Pengaturan SPK diperbarui.');
     }
 
     // === Pengaturan Periode Pengisian ===
