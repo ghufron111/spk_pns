@@ -2,6 +2,10 @@
 @section('content')
 <div>
   <h2>Persetujuan Kenaikan Pangkat</h2>
+  <ul class="nav nav-tabs mb-3">
+    <li class="nav-item"><a class="nav-link active" href="{{ route('pimpinan.approvals.index') }}">Rekomendasi SPK</a></li>
+    <li class="nav-item"><a class="nav-link" href="{{ route('pimpinan.considerations') }}">Perlu Dipertimbangkan</a></li>
+  </ul>
   @if(session('success'))<div class="alert alert-success">{{ session('success') }}</div>@endif
   <form method="GET" class="row g-2 mb-3">
     <div class="col-auto">
@@ -23,7 +27,8 @@
         <th>Pegawai</th>
         <th>Jenis</th>
         <th>Periode</th>
-        <th>Hasil SPK</th>
+  <th>Skor %</th>
+  <th>Hasil SPK</th>
         <th>Catatan</th>
         <th>Aksi</th>
       </tr>
@@ -35,6 +40,10 @@
           <td>{{ $u->user->name ?? '-' }}</td>
           <td>{{ strtoupper($u->jenis ?? '-') }}</td>
           <td>{{ $u->periode ?? '-' }}</td>
+          <td>
+            @php $skorPercent = null; if($u->hasilSpk && preg_match('/\[SKOR:\s*([0-9.]+)\s*\/\s*100\]/',$u->hasilSpk->catatan,$m)){ $skorPercent=$m[1]; } @endphp
+            {{ $skorPercent!==null ? $skorPercent : '-' }}
+          </td>
           <td>
             @if($u->hasilSpk)
               <span class="badge @class([
@@ -58,7 +67,16 @@
           </td>
         </tr>
       @empty
-        <tr><td colspan="7" class="text-center text-muted">Belum ada data.</td></tr>
+        <tr>
+          <td colspan="8" class="text-center text-muted small">
+            Belum ada rekomendasi siap. Kemungkinan:
+            <ul class="list-unstyled mt-2">
+              <li>• SPK belum dijalankan atau tidak ada upload mencapai ambang disetujui.</li>
+              <li>• Semua rekomendasi sudah difinalkan (disetujui / ditolak).</li>
+              <li>• Filter jenis membatasi hasil (coba reset).</li>
+            </ul>
+          </td>
+        </tr>
       @endforelse
     </tbody>
   </table>

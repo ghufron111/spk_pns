@@ -39,27 +39,49 @@ class PimpinanController extends Controller
     public function approvals(\Illuminate\Http\Request $request)
     {
         $filterJenis = $request->get('jenis');
+        // Halaman REKOMENDASI: hanya tampilkan hasilSpk kategori 'disetujui' (rekomendasi SPK)
+        // yang BELUM difinalkan (upload.status bukan disetujui/ditolak). Pimpinan tetap harus memutuskan.
         $query = Upload::with(['user','hasilSpk'])
+            ->whereNotIn('status',[ 'disetujui','ditolak'])
             ->whereHas('hasilSpk', function($q){
-                $q->where('hasil','dipertimbangkan'); // only pending consideration
+                $q->where('hasil','disetujui');
             });
-        if ($filterJenis) {
-            $query->where('jenis',$filterJenis);
-        }
-        $uploads = $query->orderByDesc('id')->get();
+        if ($filterJenis) { $query->where('jenis',$filterJenis); }
+        $uploads = $query->orderByDesc('id')->get()
+            ->groupBy('user_id')
+            ->flatMap(function($perUser){
+                $sorted = $perUser->sortByDesc(function($item){
+                    $p = $item->periode; $ts=null; try { if($p) $ts=\Carbon\Carbon::parse($p)->timestamp; } catch(\Exception $e) { $ts=null; }
+                    return [$ts ?? 0, $item->id];
+                });
+                return $sorted->take(1);
+            })
+            ->values();
         $distinctJenis = Upload::select('jenis')->distinct()->pluck('jenis')->filter();
-        return view('pimpinan.approvals', compact('uploads','filterJenis','distinctJenis'));
+        $mode = 'rekomendasi';
+        return view('pimpinan.approvals', compact('uploads','filterJenis','distinctJenis','mode'));
     }
 
     public function considerations(Request $request)
     {
         $filterJenis = $request->get('jenis');
         $query = Upload::with(['user','hasilSpk'])
+            ->whereNotIn('status',['disetujui','ditolak'])
             ->whereHas('hasilSpk', fn($q)=>$q->where('hasil','dipertimbangkan'));
         if ($filterJenis) { $query->where('jenis',$filterJenis); }
-        $uploads = $query->orderByDesc('id')->get();
+        $uploads = $query->orderByDesc('id')->get()
+            ->groupBy('user_id')
+            ->flatMap(function($perUser){
+                $sorted = $perUser->sortByDesc(function($item){
+                    $p = $item->periode; $ts=null; try { if($p) $ts=\Carbon\Carbon::parse($p)->timestamp; } catch(\Exception $e) { $ts=null; }
+                    return [$ts ?? 0, $item->id];
+                });
+                return $sorted->take(1);
+            })
+            ->values();
         $distinctJenis = Upload::select('jenis')->distinct()->pluck('jenis')->filter();
-        return view('pimpinan.considerations', compact('uploads','filterJenis','distinctJenis'));
+        $mode = 'dipertimbangkan';
+        return view('pimpinan.considerations', compact('uploads','filterJenis','distinctJenis','mode'));
     }
 
     public function approve($id)

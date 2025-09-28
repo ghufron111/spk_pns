@@ -95,11 +95,24 @@ class AdminController extends Controller
         $uploads = Upload::with(['user','detailUploads'])
             ->get()
             ->filter(function($u) use ($minValidDocs){
-                // Hitung semua dokumen berstatus valid/disetujui (tidak lagi bergantung daftar bobot lama)
                 $validCount = $u->detailUploads
                     ->filter(fn($d)=>in_array($d->status,['valid','disetujui']))
                     ->count();
                 return $validCount >= $minValidDocs;
+            })
+            ->groupBy('user_id')
+            ->flatMap(function($perUser){
+                // Ambil upload dengan periode 'terbaru'. Periode bisa berupa string bukan tanggal murni, jadi fallback ke id terbesar.
+                $sorted = $perUser->sortByDesc(function($item){
+                    // Coba parse periode sebagai tanggal; jika gagal gunakan created_at/id
+                    $p = $item->periode;
+                    $ts = null;
+                    if ($p) {
+                        try { $ts = \Carbon\Carbon::parse($p)->timestamp; } catch(\Exception $e){ $ts = null; }
+                    }
+                    return [$ts ?? 0, $item->id];
+                });
+                return $sorted->take(1); // hanya periode terbaru per user
             })
             ->values();
 
@@ -153,7 +166,11 @@ class AdminController extends Controller
             $jenis = $u->jenis ?: 'reguler';
             $jenisWeights = $this->getJenisWeights($jenis);
             if (empty($jenisWeights)) continue; // skip jika tidak ada bobot terdefinisi
-            $totalWeightJenis = array_sum($jenisWeights) ?: 1;
+            // Sebelumnya denominator normalisasi memakai total semua bobot terdefinisi (termasuk dokumen yang belum diunggah)
+            // sehingga persentase sulit mencapai 100%. Mulai sekarang kita pakai hanya bobot dokumen yang BENAR-BENAR ADA
+            // (memiliki detail upload) agar jika seluruh dokumen yang diunggah telah disetujui -> skor bisa 100%.
+            $totalWeightJenis = array_sum($jenisWeights) ?: 1; // total teoretis (referensi)
+            $effectiveWeight = 0; // total bobot dokumen yang muncul (uploaded) apapun statusnya
             $raw = 0.0;
             $approved = $validOnly = $pending = $rejected = 0;
             $approvedList = $validList = $pendingList = $rejectedList = $missingList = [];
@@ -161,7 +178,10 @@ class AdminController extends Controller
                 $detail = $u->detailUploads->firstWhere('nama_berkas', $doc);
                 $st = $detail? $detail->status : null;
                 $factor = $statusFactor[$st] ?? 0.0;
-                $raw += ($factor * $w);
+                if ($detail) { // hanya dokumen yang ada yang dihitung ke denominator efektif
+                    $effectiveWeight += $w;
+                    $raw += ($factor * $w);
+                }
                 $label = str_replace('_',' ', $doc);
                 if (!$detail) { $missingList[] = $label; continue; }
                 switch ($st) {
@@ -172,7 +192,9 @@ class AdminController extends Controller
                     case 'tidak_disetujui': $rejected++; $rejectedList[] = $label; break;
                 }
             }
-            $norm = $raw / $totalWeightJenis;
+            // Normalisasi baru: gunakan effectiveWeight jika > 0, fallback ke totalWeightJenis lama
+            $denom = $effectiveWeight > 0 ? $effectiveWeight : $totalWeightJenis;
+            $norm = $denom ? ($raw / $denom) : 0;
             $scores[] = [
                 'upload' => $u,
                 'raw' => $raw,
@@ -186,14 +208,17 @@ class AdminController extends Controller
                 'pendingList' => $pendingList,
                 'rejectedList' => $rejectedList,
                 'missingList' => $missingList,
-                'totalWeightJenis' => $totalWeightJenis,
+                'totalWeightJenis' => $totalWeightJenis, // total teoretis
+                'effectiveWeight' => $effectiveWeight,   // total real dipakai
                 'jenisWeights' => $jenisWeights,
             ];
         }
 
         // Tentukan kategori berdasarkan skor normalisasi
         foreach ($scores as $row) {
-            $norm = $row['norm'];
+            $norm = $row['norm']; // 0..1
+            // Skala baru 0..100 agar mudah dipahami
+            $percentScore = round($norm * 100, 2);
             $kategori = $norm >= $approvedThreshold ? 'disetujui' : ($norm >= $considerThreshold ? 'dipertimbangkan' : 'ditolak');
             $qualified = $row['approved'] + $row['validOnly'];
             $reasonParts = [];
@@ -252,7 +277,7 @@ class AdminController extends Controller
             if (empty($reasonParts)) {
                 $reasonParts[] = 'Evaluasi selesai.'; // fallback
             }
-            $catatan = implode(' ', $reasonParts);
+            $catatan = '[SKOR: '.$percentScore.' / 100] '.implode(' ', $reasonParts);
             HasilSpk::updateOrCreate(
                 ['upload_id'=>$row['upload']->id],
                 ['hasil'=>$kategori,'catatan'=>$catatan]

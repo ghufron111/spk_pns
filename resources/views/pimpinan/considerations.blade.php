@@ -1,10 +1,11 @@
 @extends('layouts.app')
 @section('content')
 <div>
-  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-    <h2 class="mb-0">Pengajuan Dipertimbangkan</h2>
-    <a href="{{ route('pimpinan.dashboard') }}" class="btn btn-sm btn-outline-secondary">Kembali Dashboard</a>
-  </div>
+  <h2>Persetujuan Kenaikan Pangkat</h2>
+  <ul class="nav nav-tabs mb-3">
+    <li class="nav-item"><a class="nav-link" href="{{ route('pimpinan.approvals.index') }}">Rekomendasi SPK</a></li>
+    <li class="nav-item"><a class="nav-link active" href="{{ route('pimpinan.considerations') }}">Perlu Dipertimbangkan</a></li>
+  </ul>
   @if(session('success'))<div class="alert alert-success">{{ session('success') }}</div>@endif
   <form method="GET" class="row g-2 mb-3">
     <div class="col-auto">
@@ -26,7 +27,8 @@
         <th>Pegawai</th>
         <th>Jenis</th>
         <th>Periode</th>
-        <th>Hasil SPK</th>
+  <th>Skor %</th>
+  <th>Hasil SPK</th>
         <th>Catatan</th>
         <th>Aksi</th>
       </tr>
@@ -38,6 +40,10 @@
           <td>{{ $u->user->name ?? '-' }}</td>
           <td>{{ strtoupper($u->jenis ?? '-') }}</td>
           <td>{{ $u->periode ?? '-' }}</td>
+          <td>
+            @php $skorPercent = null; if($u->hasilSpk && preg_match('/\[SKOR:\s*([0-9.]+)\s*\/\s*100\]/',$u->hasilSpk->catatan,$m)){ $skorPercent=$m[1]; } @endphp
+            {{ $skorPercent!==null ? $skorPercent : '-' }}
+          </td>
           <td>
             @if($u->hasilSpk)
               <span class="badge bg-warning text-dark">{{ strtoupper($u->hasilSpk->hasil) }}</span>
@@ -56,7 +62,17 @@
           </td>
         </tr>
       @empty
-        <tr><td colspan="7" class="text-center text-muted">Belum ada data.</td></tr>
+        <tr>
+          <td colspan="8" class="text-center text-muted small">
+            Belum ada pengajuan dalam kategori dipertimbangkan. Kemungkinan:
+            <ul class="list-unstyled mt-2">
+              <li>• SPK belum dijalankan.</li>
+              <li>• Semua pengajuan sudah direkomendasikan (disetujui) atau difinalkan.</li>
+              <li>• Belum cukup dokumen valid untuk melewati ambang minimal.</li>
+              <li>• Filter jenis membatasi hasil (coba reset).</li>
+            </ul>
+          </td>
+        </tr>
       @endforelse
     </tbody>
   </table>

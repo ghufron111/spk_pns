@@ -46,18 +46,21 @@
                 <th>Dokumen Bernilai (Valid/Disetujui)</th>
                 <th>Skor (Raw)</th>
                 <th>Normalisasi %</th>
+                <th>Skor %</th>
                 <th>Hasil Terakhir</th>
                 <th class="col-catatan">Catatan</th>
             </tr>
         </thead>
         <tbody>
             @forelse($uploads as $u)
-                @php 
+                @php
                     $jenisW = $weightsPerJenis[$u->jenis] ?? $weightsPerJenis['reguler'] ?? [];
-                    $totalJenis = array_sum($jenisW) ?: 1;
+                    // Effective denominator: hanya bobot dokumen yang benar-benar diunggah (ada detail upload-nya)
+                    $uploadedNames = $u->detailUploads->pluck('nama_berkas')->unique();
+                    $effectiveTotal = $uploadedNames->reduce(function($carry,$name) use ($jenisW){ return $carry + ($jenisW[$name] ?? 0); }, 0) ?: 1;
                     $validDocs = $u->detailUploads->filter(fn($d)=>in_array($d->status,['valid','disetujui']) && array_key_exists($d->nama_berkas,$jenisW));
                     $rawScore = $validDocs->sum(fn($d)=>$jenisW[$d->nama_berkas] ?? 0);
-                    $norm = $totalJenis ? round(($rawScore / $totalJenis) * 100,2) : 0;
+                    $norm = $effectiveTotal ? round(($rawScore / $effectiveTotal) * 100,2) : 0;
                     $hasilRow = $hasil->firstWhere('upload_id', $u->id); 
                     $labelHasil = $hasilRow? strtoupper($hasilRow->hasil):'-';
                     $badgeClass = match($hasilRow->hasil ?? '') {
@@ -75,6 +78,15 @@
                     <td>{{ $validDocs->count() }}</td>
                     <td>{{ $rawScore }}</td>
                     <td>{{ $norm }}</td>
+                    <td>
+                        @php
+                            $skorPercent = null;
+                            if($hasilRow && preg_match('/\[SKOR:\s*([0-9.]+)\s*\/\s*100\]/',$hasilRow->catatan,$mm)) {
+                                $skorPercent = $mm[1];
+                            } elseif($norm!==null) { $skorPercent = $norm; }
+                        @endphp
+                        {{ $skorPercent !== null ? $skorPercent : '-' }}
+                    </td>
                     <td><span class="badge {{ $badgeClass }}">{{ $labelHasil }}</span></td>
                     <td class="col-catatan"><div class="small">{{ $hasilRow? $hasilRow->catatan:'-' }}</div></td>
                 </tr>
