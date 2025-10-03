@@ -18,6 +18,8 @@ return new class extends Migration
             $table->string('role')->default('pegawai');
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password');
+            // Path relatif (storage/app/public/avatars/...) atau absolute URL setelah di-resolve via Storage::url
+            $table->string('avatar_path')->nullable();
             $table->rememberToken();
             $table->timestamps();
         });

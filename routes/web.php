@@ -59,3 +59,14 @@ Route::middleware(['auth', \App\Http\Middleware\RoleMiddleware::class . ':pimpin
     Route::post('/approvals/{id}/approve', [App\Http\Controllers\PimpinanController::class, 'approve'])->name('approvals.approve');
     Route::post('/approvals/{id}/reject', [App\Http\Controllers\PimpinanController::class, 'reject'])->name('approvals.reject');
 });
+
+// Profil & Password (semua user login)
+Route::middleware(['auth'])->group(function(){
+    Route::get('/profil', [App\Http\Controllers\ProfileController::class,'show'])->name('profile.show');
+    Route::get('/profil/edit', [App\Http\Controllers\ProfileController::class,'edit'])->name('profile.edit');
+    Route::post('/profil', [App\Http\Controllers\ProfileController::class,'update'])->name('profile.update');
+    // Stream avatar privat
+    Route::get('/profil/avatar', [App\Http\Controllers\ProfileController::class,'avatar'])->name('profile.avatar');
+    Route::get('/password', [App\Http\Controllers\PasswordController::class,'edit'])->name('password.edit');
+    Route::post('/password', [App\Http\Controllers\PasswordController::class,'update'])->name('password.update');
+});

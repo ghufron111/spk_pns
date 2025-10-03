@@ -9,6 +9,9 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400..700;1,400..700&family=Roboto:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+    @stack('styles')
 </head>
 <body class="bg-light">
     <nav class="navbar navbar-expand-lg navbar-dark app-navbar fixed-top">
@@ -26,14 +29,29 @@
                 <ul class="navbar-nav align-items-center gap-lg-3">
                     <li class="nav-item dropdown" style="z-index:1050; border-radius:6px;">
                         <a class="nav-link dropdown-toggle d-flex align-items-center gap-2" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                            <div class="user-initial rounded-circle bg-white text-primary fw-bold">{{ strtoupper(substr(auth()->user()->name,0,1)) }}</div>
-                            <span class="small fw-semibold text-white">{{ auth()->user()->name }}</span>
+                            @php($u = auth()->user())
+                            <x-avatar :user="$u" :size="34" :ring="false" class="flex-shrink-0" :version="$u->updated_at?->timestamp" />
+                            <span class="small fw-semibold text-white">{{ $u->name }}</span>
                         </a>
                         <ul class="dropdown-menu dropdown-menu-end shadow-sm small">
-                            <li class="px-3 py-2">
-                                <div class="fw-semibold mb-0">{{ auth()->user()->name }}</div>
-                                <div class="text-muted">{{ ucfirst(auth()->user()->role) }}</div>
-                                <div class="mt-1"><span class="badge bg-primary-subtle text-primary-emphasis border">{{ auth()->user()->pangkat ?? '-' }}</span></div>
+                            <li class="px-3 pt-3 pb-2 d-flex flex-column align-items-center text-center" style="min-width:230px;">
+                                <div class="mb-2" style="line-height:0;">
+                                    <x-avatar :user="$u" :size="80" :version="$u->updated_at?->timestamp" />
+                                </div>
+                                <div class="fw-semibold mb-0">{{ $u->name }}</div>
+                                <div class="text-muted small mb-1">{{ ucfirst($u->role) }}</div>
+                                <div class="mt-1 mb-1"><span class="badge bg-primary-subtle text-primary-emphasis border">{{ $u->pangkat ?? '-' }}</span></div>
+                            </li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <a href="{{ route('profile.show') }}" class="dropdown-item d-flex align-items-center gap-2">
+                                    <i class="bi bi-person-circle"></i> <span>Profil</span>
+                                </a>
+                            </li>
+                            <li>
+                                <a href="{{ route('password.edit') }}" class="dropdown-item d-flex align-items-center gap-2">
+                                    <i class="bi bi-key-fill"></i> <span>Ubah Password</span>
+                                </a>
                             </li>
                             <li><hr class="dropdown-divider"></li>
                             <li>
@@ -128,6 +146,7 @@
     }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    @stack('scripts')
     <script>
         document.addEventListener('scroll', ()=>{
             if(window.scrollY>4) document.body.classList.add('scrolled'); else document.body.classList.remove('scrolled');
