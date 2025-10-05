@@ -45,14 +45,6 @@
                     <span class="badge text-bg-primary-subtle text-primary-emphasis border small">130 x 130</span>
                   </div>
                   <div class="d-flex flex-column gap-3">
-                    <div class="d-flex flex-column align-items-center gap-1">
-                      <canvas id="previewMedium" width="120" height="120" style="border-radius:50%;background:#f1f5f9;border:2px solid #dbeafe;"></canvas>
-                      <small class="text-muted">60x60</small>
-                    </div>
-                    <div class="d-flex flex-column align-items-center gap-1">
-                      <canvas id="previewSmall" width="64" height="64" style="border-radius:50%;background:#f1f5f9;border:2px solid #e2e8f0;"></canvas>
-                      <small class="text-muted">32x32</small>
-                    </div>
                     <div class="mt-2"><span id="cropStatus" class="badge bg-secondary-subtle text-secondary-emphasis border">Belum diterapkan</span></div>
                   </div>
                 </div>
