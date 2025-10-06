@@ -83,6 +83,7 @@
                 <li class="nav-item"><a href="{{ route('admin.spk.index') }}" class="nav-link px-3">Proses SPK</a></li>
                 <li class="nav-item"><a href="{{ route('admin.periode.settings') }}" class="nav-link px-3">Periode Pengisian</a></li>
                 <li class="nav-item"><a href="{{ route('admin.dokumen.settings') }}" class="nav-link px-3">Pengaturan Dokumen</a></li>
+                <li class="nav-item"><a href="{{ route('admin.users.index') }}" class="nav-link px-3">Kelola User</a></li>
             @elseif(auth()->user()->role === 'pimpinan')
                 <li class="nav-item"><a href="{{ route('pimpinan.dashboard') }}" class="nav-link px-3">Dashboard</a></li>
                 <li class="nav-item"><a href="{{ route('pimpinan.considerations') }}" class="nav-link px-3">Dipertimbangkan</a></li>

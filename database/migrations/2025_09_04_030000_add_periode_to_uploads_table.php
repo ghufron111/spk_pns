@@ -14,9 +14,17 @@ return new class extends Migration {
             }
         });
         // Inisialisasi periode lama (isi tahun dari tanggal_upload) jika null
-        DB::table('uploads')->whereNull('periode')->update([
-            'periode' => DB::raw('YEAR(tanggal_upload)')
-        ]);
+        $driver = DB::getDriverName();
+        if ($driver === 'sqlite') {
+            // sqlite tidak punya YEAR(); gunakan strftime
+            DB::table('uploads')->whereNull('periode')->update([
+                'periode' => DB::raw("strftime('%Y', tanggal_upload)")
+            ]);
+        } else {
+            DB::table('uploads')->whereNull('periode')->update([
+                'periode' => DB::raw('YEAR(tanggal_upload)')
+            ]);
+        }
     }
     public function down(): void
     {

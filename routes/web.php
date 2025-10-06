@@ -46,6 +46,14 @@ Route::middleware(['auth', \App\Http\Middleware\RoleMiddleware::class . ':admin'
     Route::post('/upload/{uploadId}/batch-validasi', [App\Http\Controllers\AdminController::class, 'validasiBatch'])->name('upload.validasi.batch');
     Route::get('/preview/{detailId}', [App\Http\Controllers\AdminController::class, 'previewFile'])->name('upload.preview');
     Route::get('/download/{detailId}', [App\Http\Controllers\AdminController::class, 'downloadFile'])->name('upload.download');
+
+    // Manajemen User
+    Route::get('/users', [App\Http\Controllers\AdminUserController::class, 'index'])->name('users.index');
+    Route::get('/users/create', [App\Http\Controllers\AdminUserController::class, 'create'])->name('users.create');
+    Route::post('/users', [App\Http\Controllers\AdminUserController::class, 'store'])->name('users.store');
+    Route::get('/users/{user}/edit', [App\Http\Controllers\AdminUserController::class, 'edit'])->name('users.edit');
+    Route::put('/users/{user}', [App\Http\Controllers\AdminUserController::class, 'update'])->name('users.update');
+    Route::delete('/users/{user}', [App\Http\Controllers\AdminUserController::class, 'destroy'])->name('users.destroy');
 });
 
 // Pimpinan
