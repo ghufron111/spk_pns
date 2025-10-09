@@ -71,8 +71,8 @@ it('orders users by id desc', function(){
     $resp = $this->get(route('admin.users.index'));
     $resp->assertStatus(200);
     $html = $resp->getContent();
-    // Ambil semua kemunculan kolom ID pertama setiap baris (kolom 1)
-    preg_match_all('/<td>(\d+)<\/td>\s*<td>/', $html, $matches);
+    // Ambil nilai pada kolom kedua setiap baris (NIP yang berisi users.id)
+    preg_match_all('/<tr>\s*<td>.*?<\/td>\s*<td>(\d+)<\/td>/s', $html, $matches);
     $ids = $matches[1] ?? [];
     // Pastikan urutan menampilkan id terbesar lebih dulu
     if (count($ids) >= 3) {

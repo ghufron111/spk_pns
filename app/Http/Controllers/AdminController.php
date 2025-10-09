@@ -57,14 +57,14 @@ class AdminController extends Controller
                 'catatan' => $catatan
             ]);
         }
-        // Notifikasi ke pegawai jika ditolak atau ada catatan
-    if (in_array($status, ['pending','ditolak']) || $catatan) {
+    // Notifikasi ke pegawai jika perlu tindak lanjut atau ada catatan
+    if (in_array($status, ['pending','revisi','ditolak']) || $catatan) {
             \App\Models\Notifikasi::create([
                 'user_id' => $detail->upload->user_id,
-        'pesan' => 'Berkas '.str_replace('_',' ',$detail->nama_berkas).' status: '.strtoupper($status).($catatan?" - $catatan":''),
+        'pesan' => 'Berkas '.str_replace('_',' ', $detail->nama_berkas).' status: '.strtoupper($status === 'ditolak' ? 'revisi' : $status).($catatan?" - $catatan":''),
                 'dibaca' => false
             ]);
-        }
+    }
         // Jika semua detail untuk upload ini sudah valid -> hitung skor awal dan tandai siap
         $upload = $detail->upload()->with('detailUploads','user')->first();
         if ($upload) {
@@ -96,7 +96,7 @@ class AdminController extends Controller
             ->get()
             ->filter(function($u) use ($minValidDocs){
                 $validCount = $u->detailUploads
-                    ->filter(fn($d)=>in_array($d->status,['valid','disetujui']))
+                    ->filter(fn($d)=>in_array($d->status,['valid','disetujui','dipertimbangkan']))
                     ->count();
                 return $validCount >= $minValidDocs;
             })
@@ -117,7 +117,7 @@ class AdminController extends Controller
             ->values();
 
         // Kumpulkan daftar nilai filter yang tersedia (distinct)
-        $distinctJenis = $uploads->pluck('jenis')->filter()->unique()->values();
+    $distinctJenis = $uploads->pluck('jenis')->filter()->unique()->values();
         $distinctPeriode = $uploads->pluck('periode')->filter()->unique()->values();
 
         $filterJenis = $request->get('jenis');
@@ -142,11 +142,13 @@ class AdminController extends Controller
     public function spkRun(Request $request)
     {
         // Implementasi SAW: tiap dokumen bernilai menjadi kriteria benefit.
-        // valueFactor per status: disetujui=1.0, valid=0.9, pending=0.4, ditolak/tidak_disetujui/missing=0.
+        // valueFactor per status: disetujui=1.0, valid=0.9, dipertimbangkan=0.7, pending=0.0, revisi/ditolak/tidak_disetujui/missing=0.
         $statusFactor = [
             'disetujui' => 1.0,
             'valid' => 0.9,
-            'pending' => 0.4,
+            'dipertimbangkan' => 0.7,
+            'pending' => 0.0,
+            'revisi' => 0.0,
             'ditolak' => 0.0,
             'tidak_disetujui' => 0.0,
         ];
@@ -154,9 +156,9 @@ class AdminController extends Controller
         $considerThreshold = $this->getSetting('threshold_consider', config('berkas.thresholds.consider', 0.55));
         $minValidDocs = $this->getSetting('threshold_min_valid_docs', config('berkas.thresholds.min_valid_docs', 3));
 
-        // Ambil kandidat (>= minValidDocs dokumen bernilai status valid/disetujui, terlepas dari jenis)
+        // Ambil kandidat (>= minValidDocs dokumen bernilai status valid/disetujui/dipertimbangkan)
         $uploads = Upload::with('detailUploads')->get()->filter(function($u) use ($minValidDocs){
-            $count = $u->detailUploads->filter(fn($d)=>in_array($d->status,['valid','disetujui']))->count();
+            $count = $u->detailUploads->filter(fn($d)=>in_array($d->status,['valid','disetujui','dipertimbangkan']))->count();
             return $count >= $minValidDocs;
         })->values();
 
@@ -172,8 +174,9 @@ class AdminController extends Controller
             $totalWeightJenis = array_sum($jenisWeights) ?: 1; // total teoretis (referensi)
             $effectiveWeight = 0; // total bobot dokumen yang muncul (uploaded) apapun statusnya
             $raw = 0.0;
-            $approved = $validOnly = $pending = $rejected = 0;
-            $approvedList = $validList = $pendingList = $rejectedList = $missingList = [];
+            $approved = $validOnly = $considered = $pending = $rejected = 0;
+            $approvedList = $validList = $consideredList = $pendingList = $rejectedList = $missingList = [];
+            $qualifiedWeight = 0; // bobot dokumen bernilai (valid/disetujui/dipertimbangkan)
             foreach ($jenisWeights as $doc => $w) {
                 $detail = $u->detailUploads->firstWhere('nama_berkas', $doc);
                 $st = $detail? $detail->status : null;
@@ -185,9 +188,11 @@ class AdminController extends Controller
                 $label = str_replace('_',' ', $doc);
                 if (!$detail) { $missingList[] = $label; continue; }
                 switch ($st) {
-                    case 'disetujui': $approved++; $approvedList[] = $label; break;
-                    case 'valid': $validOnly++; $validList[] = $label; break;
+                    case 'disetujui': $approved++; $approvedList[] = $label; $qualifiedWeight += $w; break;
+                    case 'valid': $validOnly++; $validList[] = $label; $qualifiedWeight += $w; break;
+                    case 'dipertimbangkan': $considered++; $consideredList[] = $label; $qualifiedWeight += $w; break;
                     case 'pending': $pending++; $pendingList[] = $label; break;
+                    case 'revisi':
                     case 'ditolak':
                     case 'tidak_disetujui': $rejected++; $rejectedList[] = $label; break;
                 }
@@ -195,22 +200,29 @@ class AdminController extends Controller
             // Normalisasi baru: gunakan effectiveWeight jika > 0, fallback ke totalWeightJenis lama
             $denom = $effectiveWeight > 0 ? $effectiveWeight : $totalWeightJenis;
             $norm = $denom ? ($raw / $denom) : 0;
+            // Coverage
+            $coverageUploaded = $totalWeightJenis ? ($effectiveWeight / $totalWeightJenis) : 0;
+            $coverageQualified = $totalWeightJenis ? ($qualifiedWeight / $totalWeightJenis) : 0;
             $scores[] = [
                 'upload' => $u,
                 'raw' => $raw,
                 'norm' => $norm,
                 'approved' => $approved,
                 'validOnly' => $validOnly,
+                'considered' => $considered,
                 'pending' => $pending,
                 'rejected' => $rejected,
                 'approvedList' => $approvedList,
                 'validList' => $validList,
+                'consideredList' => $consideredList,
                 'pendingList' => $pendingList,
                 'rejectedList' => $rejectedList,
                 'missingList' => $missingList,
                 'totalWeightJenis' => $totalWeightJenis, // total teoretis
                 'effectiveWeight' => $effectiveWeight,   // total real dipakai
                 'jenisWeights' => $jenisWeights,
+                'coverageUploaded' => $coverageUploaded,
+                'coverageQualified' => $coverageQualified,
             ];
         }
 
@@ -220,7 +232,7 @@ class AdminController extends Controller
             // Skala baru 0..100 agar mudah dipahami
             $percentScore = round($norm * 100, 2);
             $kategori = $norm >= $approvedThreshold ? 'disetujui' : ($norm >= $considerThreshold ? 'dipertimbangkan' : 'ditolak');
-            $qualified = $row['approved'] + $row['validOnly'];
+            $qualified = $row['approved'] + $row['validOnly'] + ($row['considered'] ?? 0);
             $reasonParts = [];
 
             // Tentukan dokumen kunci berdasarkan bobot terbesar per jenis (top 4)
@@ -277,7 +289,9 @@ class AdminController extends Controller
             if (empty($reasonParts)) {
                 $reasonParts[] = 'Evaluasi selesai.'; // fallback
             }
-            $catatan = '[SKOR: '.$percentScore.' / 100] '.implode(' ', $reasonParts);
+            $covU = round(($row['coverageUploaded'] ?? 0) * 100, 1);
+            $covQ = round(($row['coverageQualified'] ?? 0) * 100, 1);
+            $catatan = '[SKOR: '.$percentScore.' / 100] '.implode(' ', $reasonParts).' [COVERAGE: Upload '.$covU.'% | Qualified '.$covQ.'%]';
             HasilSpk::updateOrCreate(
                 ['upload_id'=>$row['upload']->id],
                 ['hasil'=>$kategori,'catatan'=>$catatan]
@@ -307,10 +321,10 @@ class AdminController extends Controller
                 $detail->catatan = $newCat;
                 $detail->save();
                 $changed++;
-                if (in_array($newStatus, ['pending','ditolak']) || $newCat) {
+                if (in_array($newStatus, ['pending','revisi','ditolak']) || $newCat) {
                     \App\Models\Notifikasi::create([
                         'user_id' => $upload->user_id,
-                        'pesan' => 'Berkas '.str_replace('_',' ', $detail->nama_berkas).' status: '.strtoupper($newStatus).($newCat?" - $newCat":''),
+                        'pesan' => 'Berkas '.str_replace('_',' ', $detail->nama_berkas).' status: '.strtoupper($newStatus === 'ditolak' ? 'revisi' : $newStatus).($newCat?" - $newCat":''),
                         'dibaca' => false,
                     ]);
                 }
@@ -377,6 +391,7 @@ class AdminController extends Controller
     public function spkSettingsUpdate(\Illuminate\Http\Request $request)
     {
         $jenis = $request->input('jenis', 'reguler');
+        $jenisNormalized = \Illuminate\Support\Str::slug($jenis, '_');
         $weightsInput = $request->input('weights', []);
         $approved = (float)$request->input('thresholds.approved', 0.85);
         $consider = (float)$request->input('thresholds.consider', 0.55);
@@ -402,12 +417,24 @@ class AdminController extends Controller
         }
         if ($minValidDocs < 1) $minValidDocs = 1;
 
-        // Simpan bobot per jenis
+        // Simpan bobot per jenis (gunakan jenis yang dinormalisasi)
         foreach ($weightsInput as $slug => $val) {
             $v = (int)$val;
             if ($v < 0) $v = 0;
+            // Migrasi nilai lama jika ada key legacy yang tidak dinormalisasi
+            if ($jenisNormalized !== $jenis) {
+                $legacyKey = 'weight_' . $jenis . '_' . $slug;
+                $legacy = \App\Models\SpkSetting::where('key', $legacyKey)->first();
+                if ($legacy && !\App\Models\SpkSetting::where('key','weight_'.$jenisNormalized.'_'.$slug)->exists()) {
+                    \App\Models\SpkSetting::updateOrCreate([
+                        'key' => 'weight_' . $jenisNormalized . '_' . $slug
+                    ], [
+                        'value' => (int)$legacy->value
+                    ]);
+                }
+            }
             \App\Models\SpkSetting::updateOrCreate([
-                'key' => 'weight_' . $jenis . '_' . $slug
+                'key' => 'weight_' . $jenisNormalized . '_' . $slug
             ], [
                 'value' => $v
             ]);
@@ -416,7 +443,7 @@ class AdminController extends Controller
         \App\Models\SpkSetting::updateOrCreate(['key'=>'threshold_consider'], ['value'=>$consider]);
         \App\Models\SpkSetting::updateOrCreate(['key'=>'threshold_min_valid_docs'], ['value'=>$minValidDocs]);
 
-        return redirect()->route('admin.spk.settings', ['jenis'=>$jenis])->with('success','Pengaturan SPK diperbarui.');
+        return redirect()->route('admin.spk.settings', ['jenis'=>$jenisNormalized])->with('success','Pengaturan SPK diperbarui.');
     }
 
     // === Pengaturan Periode Pengisian ===
@@ -527,6 +554,8 @@ class AdminController extends Controller
 
     private function getJenisWeights(string $jenis): array
     {
+        // Normalisasi nama jenis agar cocok dengan key di config dan di spk_settings
+        $jenis = Str::slug($jenis, '_');
         $map = config('berkas.jenis')[$jenis] ?? [];
         // Merge with dynamic patterns that might have been added later (docpattern_{jenis}_*)
         $extraPatterns = SpkSetting::where('key','like','docpattern_'.$jenis.'_%')->get();
@@ -544,9 +573,56 @@ class AdminController extends Controller
         $default = config('berkas.default_weight',5);
         $result = [];
         foreach ($map as $label => $pattern) {
-            $slug = Str::slug($label,'_');
-            // jika slug ada di dynamic pakai itu, kalau tidak pakai default
-            $result[$slug] = $dynamic[$slug] ?? $default;
+            // Slug standar yang dipakai oleh nama_berkas (berdasarkan label)
+            $slugLabel = Str::slug($label,'_');
+            // Slug yang dipakai di halaman pengaturan (berdasarkan filename pattern)
+            $slugPattern = strtolower(preg_replace('/[^a-zA-Z0-9]+/','_', pathinfo($pattern, PATHINFO_FILENAME)));
+
+            // Urutan prioritas bobot (coba slug label dulu, lalu slug pattern):
+            // 1) weight_{jenis}_{slug}
+            // 2) weight_{slug}
+            // 3) dynamic kombinasi {jenis}_{slug}
+            // 4) dynamic by slug
+            // 5) default
+            $candidatesJenis = [
+                'weight_'.$jenis.'_'.$slugLabel,
+                'weight_'.$jenis.'_'.$slugPattern,
+            ];
+            $value = null;
+            foreach ($candidatesJenis as $k) {
+                $v = SpkSetting::where('key',$k)->value('value');
+                if ($v !== null) { $value = (int)$v; break; }
+            }
+            if ($value === null) {
+                $candidatesGlobal = [
+                    'weight_'.$slugLabel,
+                    'weight_'.$slugPattern,
+                ];
+                foreach ($candidatesGlobal as $k) {
+                    $v = SpkSetting::where('key',$k)->value('value');
+                    if ($v !== null) { $value = (int)$v; break; }
+                }
+            }
+            if ($value === null) {
+                $dynKeys = [ $jenis.'_'.$slugLabel, $jenis.'_'.$slugPattern ];
+                foreach ($dynKeys as $dynKey1) {
+                    if (array_key_exists($dynKey1, $dynamic)) { $value = (int)$dynamic[$dynKey1]; break; }
+                    // case-insensitive check
+                    $target = strtolower($dynKey1);
+                    foreach ($dynamic as $k => $v) {
+                        if (strtolower($k) === $target) { $value = (int)$v; break 2; }
+                    }
+                }
+            }
+            if ($value === null) {
+                // dynamic by slug biasa
+                if (array_key_exists($slugLabel, $dynamic)) $value = (int)$dynamic[$slugLabel];
+                elseif (array_key_exists($slugPattern, $dynamic)) $value = (int)$dynamic[$slugPattern];
+            }
+            if ($value === null) { $value = $default; }
+
+            // Kembalikan dengan key slug label agar cocok dengan nama_berkas di DetailUpload
+            $result[$slugLabel] = $value;
         }
         return $result;
     }

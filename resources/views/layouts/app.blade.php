@@ -16,17 +16,21 @@
 <body class="bg-light">
     <nav class="navbar navbar-expand-lg navbar-dark app-navbar fixed-top">
         <div class="container-fluid">
-            <a class="navbar-brand d-flex align-items-center gap-2" href="#">
-                <span class="logo-circle">SPK</span>
-                <span>SPK Kenaikan Pangkat PNS</span>
-            </a>
+            <div class="d-flex align-items-center gap-2">
+                @auth
+                <!-- Burger at left for small screens -->
+                <button class="btn btn-outline-light d-lg-none" type="button" data-bs-toggle="offcanvas" data-bs-target="#appSidebarOffcanvas" aria-controls="appSidebarOffcanvas" aria-label="Menu" style="padding:.25rem .5rem; line-height:1;">
+                    <i class="bi bi-list" style="font-size:1.2rem;"></i>
+                </button>
+                @endauth
+                <a class="navbar-brand d-flex align-items-center gap-2 m-0" href="#" style="padding:0;">
+                    <span class="logo-circle">SPK</span>
+                    <span>SPK Kenaikan Pangkat PNS</span>
+                </a>
+            </div>
             @auth
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#topNavMenu" aria-controls="topNavMenu" aria-expanded="false" aria-label="Toggle navigation">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="topNavMenu">
-                <ul class="navbar-nav me-auto"></ul>
-                <ul class="navbar-nav align-items-center gap-lg-3">
+            <div class="ms-auto d-flex align-items-center">
+                <ul class="navbar-nav align-items-center gap-lg-3 m-0">
                     <li class="nav-item dropdown" style="z-index:1050; border-radius:6px;">
                         <a class="nav-link dropdown-toggle d-flex align-items-center gap-2" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                             @php($u = auth()->user())
@@ -68,7 +72,7 @@
         </div>
     </nav>
     @auth
-    <aside class="app-sidebar bg-white border-end p-0">
+    <aside class="app-sidebar bg-white border-end p-0 d-none d-lg-block">
         <div class="p-3 border-bottom">
             <strong>Menu</strong>
         </div>
@@ -92,6 +96,34 @@
             @endif
         </ul>
     </aside>
+    <!-- Offcanvas Sidebar for small screens -->
+    <div class="offcanvas offcanvas-end d-lg-none" tabindex="-1" id="appSidebarOffcanvas" aria-labelledby="appSidebarLabel" style="--bs-offcanvas-width: 260px;">
+        <div class="offcanvas-header">
+            <h5 class="offcanvas-title" id="appSidebarLabel">Menu</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+        </div>
+        <div class="offcanvas-body p-0">
+            <ul class="nav flex-column mb-4">
+                @if(auth()->user()->role === 'pegawai')
+                    <li class="nav-item"><a href="{{ route('pegawai.dashboard') }}" class="nav-link px-3 py-2" data-bs-dismiss="offcanvas">Dashboard</a></li>
+                    <li class="nav-item"><a href="{{ route('pegawai.berkas') }}" class="nav-link px-3 py-2" data-bs-dismiss="offcanvas">Status Berkas</a></li>
+                    <li class="nav-item"><a href="{{ route('pegawai.upload') }}" class="nav-link px-3 py-2" data-bs-dismiss="offcanvas">Upload Berkas</a></li>
+                @elseif(auth()->user()->role === 'admin')
+                    <li class="nav-item"><a href="{{ route('admin.dashboard') }}" class="nav-link px-3 py-2" data-bs-dismiss="offcanvas">Dashboard</a></li>
+                    <li class="nav-item"><a href="{{ route('admin.validasi.index') }}" class="nav-link px-3 py-2" data-bs-dismiss="offcanvas">Validasi Berkas</a></li>
+                    <li class="nav-item"><a href="{{ route('admin.spk.index') }}" class="nav-link px-3 py-2" data-bs-dismiss="offcanvas">Proses SPK</a></li>
+                    <li class="nav-item"><a href="{{ route('admin.periode.settings') }}" class="nav-link px-3 py-2" data-bs-dismiss="offcanvas">Periode Pengisian</a></li>
+                    <li class="nav-item"><a href="{{ route('admin.dokumen.settings') }}" class="nav-link px-3 py-2" data-bs-dismiss="offcanvas">Pengaturan Dokumen</a></li>
+                    <li class="nav-item"><a href="{{ route('admin.users.index') }}" class="nav-link px-3 py-2" data-bs-dismiss="offcanvas">Kelola User</a></li>
+                @elseif(auth()->user()->role === 'pimpinan')
+                    <li class="nav-item"><a href="{{ route('pimpinan.dashboard') }}" class="nav-link px-3 py-2" data-bs-dismiss="offcanvas">Dashboard</a></li>
+                    <li class="nav-item"><a href="{{ route('pimpinan.considerations') }}" class="nav-link px-3 py-2" data-bs-dismiss="offcanvas">Dipertimbangkan</a></li>
+                    <li class="nav-item"><a href="{{ route('pimpinan.approvals.index') }}" class="nav-link px-3 py-2" data-bs-dismiss="offcanvas">Persetujuan Kenaikan</a></li>
+                    <li class="nav-item"><a href="{{ route('pimpinan.pegawai.index') }}" class="nav-link px-3 py-2" data-bs-dismiss="offcanvas">Data Pegawai</a></li>
+                @endif
+            </ul>
+        </div>
+    </div>
     <main class="app-content">
         <div class="content-inner py-4">
             <div class="container-fluid">
@@ -117,6 +149,8 @@
 
     body { padding-top: var(--navbar-height); }
     .navbar.fixed-top { box-shadow: 0 2px 4px rgba(0,0,0,.1); z-index:1030; }
+    .app-navbar { min-height: var(--navbar-height); padding-top:.25rem; padding-bottom:.25rem; }
+    .app-navbar .container-fluid{ min-height: var(--navbar-height); }
 
     /* Sidebar */
     .app-sidebar { position: fixed; top: var(--navbar-height); left:0; bottom:0; width: var(--sidebar-width); overflow-y:auto; }
